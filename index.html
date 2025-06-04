@@ -60,6 +60,19 @@
         </main>
     </div>
 
+    <!-- Login Modal -->
+    <div class="login-overlay" id="loginOverlay">
+        <div class="login-modal">
+            <h2>pmsunset</h2>
+            <form class="login-form" id="loginForm">
+                <input type="password" id="passwordInput" placeholder="password" required>
+                <button type="submit" class="login-btn">enter</button>
+            </form>
+            <div class="login-error" id="loginError"></div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

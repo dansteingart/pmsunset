@@ -6,14 +6,16 @@ class PM2Dashboard {
         this.processUpdateInterval = null;
         this.currentView = localStorage.getItem('pmsunset-view-preference') || 'cards';
         this.currentTheme = localStorage.getItem('pmsunset-theme-preference') || 'light';
+        this.authenticated = false;
+        this.socket = null;
+        this.userPassword = localStorage.getItem('pmsunset-password') || '';
         this.init();
     }
 
     init() {
         this.setupEventListeners();
         this.restorePreferences();
-        this.startPeriodicUpdates();
-        this.loadProcesses();
+        this.showLoginIfNeeded();
     }
 
     setupEventListeners() {
@@ -24,6 +26,12 @@ class PM2Dashboard {
         document.getElementById('themeBtn').addEventListener('click', () => this.toggleTheme());
         document.getElementById('refreshBtn').addEventListener('click', () => this.loadProcesses());
         document.getElementById('closeLogsBtn').addEventListener('click', () => this.closeLogs());
+        
+        // Login form
+        document.getElementById('loginForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.handleLogin();
+        });
     }
 
     showLogs(processName) {
@@ -92,12 +100,105 @@ class PM2Dashboard {
         this.renderProcesses();
     }
 
+    showLoginIfNeeded() {
+        if (this.userPassword) {
+            this.tryAutoLogin();
+        } else {
+            this.showLogin();
+        }
+    }
+
+    async tryAutoLogin() {
+        try {
+            const response = await fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: this.userPassword })
+            });
+
+            if (response.ok) {
+                this.hideLogin();
+                this.setupSocketConnection();
+            } else {
+                localStorage.removeItem('pmsunset-password');
+                this.showLogin();
+            }
+        } catch (error) {
+            this.showLogin();
+        }
+    }
+
+    async handleLogin() {
+        const password = document.getElementById('passwordInput').value;
+        const errorDiv = document.getElementById('loginError');
+        
+        try {
+            const response = await fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password })
+            });
+
+            const result = await response.json();
+            
+            if (result.success) {
+                this.userPassword = password;
+                localStorage.setItem('pmsunset-password', password);
+                this.hideLogin();
+                this.setupSocketConnection();
+            } else {
+                errorDiv.textContent = 'invalid password';
+            }
+        } catch (error) {
+            errorDiv.textContent = 'connection error';
+        }
+    }
+
+    showLogin() {
+        document.getElementById('loginOverlay').classList.remove('hidden');
+        document.getElementById('passwordInput').focus();
+    }
+
+    hideLogin() {
+        document.getElementById('loginOverlay').classList.add('hidden');
+        document.getElementById('loginError').textContent = '';
+    }
+
+    setupSocketConnection() {
+        this.socket = io();
+        
+        this.socket.on('connect', () => {
+            this.socket.emit('authenticate', this.userPassword);
+        });
+        
+        this.socket.on('authenticated', (success) => {
+            if (success) {
+                this.authenticated = true;
+            } else {
+                localStorage.removeItem('pmsunset-password');
+                this.showLogin();
+            }
+        });
+        
+        this.socket.on('processUpdate', (processes) => {
+            this.processes = processes;
+            this.renderProcesses();
+        });
+        
+        this.socket.on('disconnect', () => {
+            this.authenticated = false;
+        });
+    }
+
     restorePreferences() {
         this.applyTheme();
         this.switchView(this.currentView);
     }
 
     async loadProcesses() {
+        // Manual refresh - only used when not using socket.io
+        if (!this.authenticated) return;
+        
         try {
             const response = await this.executeCommand('pm2 jlist');
             
@@ -222,11 +323,11 @@ class PM2Dashboard {
     }
 
     async stopProcess(processName) {
+        if (!this.authenticated) return;
+        
         try {
             const response = await this.executeCommand(`pm2 stop "${processName}"`);
-            if (response.success) {
-                this.loadProcesses();
-            } else {
+            if (!response.success) {
                 this.showError(`Failed to stop process: ${response.error}`);
             }
         } catch (error) {
@@ -235,11 +336,11 @@ class PM2Dashboard {
     }
 
     async restartProcess(processName) {
+        if (!this.authenticated) return;
+        
         try {
             const response = await this.executeCommand(`pm2 restart "${processName}"`);
-            if (response.success) {
-                this.loadProcesses();
-            } else {
+            if (!response.success) {
                 this.showError(`Failed to restart process: ${response.error}`);
             }
         } catch (error) {
@@ -265,16 +366,28 @@ class PM2Dashboard {
 
 
     async executeCommand(command) {
+        if (!this.authenticated) {
+            return { success: false, error: 'Not authenticated' };
+        }
+        
         try {
             const response = await fetch('/api/execute', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ command })
+                body: JSON.stringify({ 
+                    command,
+                    password: this.userPassword 
+                })
             });
 
             if (!response.ok) {
+                if (response.status === 401) {
+                    localStorage.removeItem('pmsunset-password');
+                    this.showLogin();
+                    return { success: false, error: 'Authentication failed' };
+                }
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
 
@@ -381,17 +494,12 @@ class PM2Dashboard {
         grid.innerHTML = `<div class="error">${message}</div>`;
     }
 
-    startPeriodicUpdates() {
-        this.processUpdateInterval = setInterval(() => {
-            if (document.querySelector('[data-tab="processes"]').classList.contains('active')) {
-                this.loadProcesses();
-            }
-        }, 5000);
-    }
-
     destroy() {
         if (this.processUpdateInterval) clearInterval(this.processUpdateInterval);
         if (this.logUpdateInterval) clearInterval(this.logUpdateInterval);
+        if (this.socket) {
+            this.socket.disconnect();
+        }
     }
 }
 
