@@ -1,7 +1,7 @@
 {
-  "name": "pm2-sunset-dashboard",
+  "name": "pmsunset",
   "version": "1.0.0",
-  "description": "A dark-themed web interface for PM2 process management",
+  "description": "A minimal web interface for PM2 process management with dark mode",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -13,7 +13,7 @@
   "devDependencies": {
     "nodemon": "^3.0.1"
   },
-  "keywords": ["pm2", "dashboard", "process-management", "nodejs"],
+  "keywords": ["pm2", "dashboard", "process-management", "nodejs", "dark-mode"],
   "author": "",
   "license": "MIT"
 }

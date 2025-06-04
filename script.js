@@ -4,42 +4,76 @@ class PM2Dashboard {
         this.currentLogProcess = null;
         this.logUpdateInterval = null;
         this.processUpdateInterval = null;
-        this.currentView = localStorage.getItem('pm2-view-preference') || 'cards';
+        this.currentView = localStorage.getItem('pmsunset-view-preference') || 'cards';
+        this.currentTheme = localStorage.getItem('pmsunset-theme-preference') || 'light';
         this.init();
     }
 
     init() {
         this.setupEventListeners();
-        this.restoreViewPreference();
+        this.restorePreferences();
         this.startPeriodicUpdates();
         this.loadProcesses();
     }
 
     setupEventListeners() {
-        document.querySelectorAll('.nav-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => this.switchTab(e.target.dataset.tab));
-        });
-
         document.querySelectorAll('.view-btn').forEach(btn => {
             btn.addEventListener('click', (e) => this.switchView(e.target.dataset.view));
         });
 
+        document.getElementById('themeBtn').addEventListener('click', () => this.toggleTheme());
         document.getElementById('refreshBtn').addEventListener('click', () => this.loadProcesses());
-        document.getElementById('clearLogsBtn').addEventListener('click', () => this.clearLogs());
-        document.getElementById('logProcessSelect').addEventListener('change', (e) => this.selectLogProcess(e.target.value));
+        document.getElementById('closeLogsBtn').addEventListener('click', () => this.closeLogs());
     }
 
-    switchTab(tabName) {
-        document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
-        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+    showLogs(processName) {
+        this.currentLogProcess = processName;
+        const logsSection = document.getElementById('logsSection');
+        const logsTitle = document.getElementById('logsTitle');
         
-        document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
-        document.getElementById(`${tabName}-tab`).classList.add('active');
+        logsTitle.textContent = `${processName} logs`;
+        logsSection.classList.remove('hidden');
+        
+        if (this.logUpdateInterval) {
+            clearInterval(this.logUpdateInterval);
+        }
+        
+        this.loadLogs();
+        this.logUpdateInterval = setInterval(() => this.loadLogs(), 2000);
+    }
+
+    closeLogs() {
+        const logsSection = document.getElementById('logsSection');
+        logsSection.classList.add('hidden');
+        
+        if (this.logUpdateInterval) {
+            clearInterval(this.logUpdateInterval);
+            this.logUpdateInterval = null;
+        }
+        
+        this.currentLogProcess = null;
+    }
+
+    toggleTheme() {
+        this.currentTheme = this.currentTheme === 'light' ? 'dark' : 'light';
+        localStorage.setItem('pmsunset-theme-preference', this.currentTheme);
+        this.applyTheme();
+    }
+
+    applyTheme() {
+        const themeBtn = document.getElementById('themeBtn');
+        if (this.currentTheme === 'dark') {
+            document.documentElement.setAttribute('data-theme', 'dark');
+            themeBtn.textContent = 'light';
+        } else {
+            document.documentElement.removeAttribute('data-theme');
+            themeBtn.textContent = 'dark';
+        }
     }
 
     switchView(viewType) {
         this.currentView = viewType;
-        localStorage.setItem('pm2-view-preference', viewType);
+        localStorage.setItem('pmsunset-view-preference', viewType);
         
         document.querySelectorAll('.view-btn').forEach(btn => btn.classList.remove('active'));
         document.querySelector(`[data-view="${viewType}"]`).classList.add('active');
@@ -58,27 +92,24 @@ class PM2Dashboard {
         this.renderProcesses();
     }
 
-    restoreViewPreference() {
+    restorePreferences() {
+        this.applyTheme();
         this.switchView(this.currentView);
     }
 
     async loadProcesses() {
         try {
-            this.updateConnectionStatus('connecting');
             const response = await this.executeCommand('pm2 jlist');
             
             if (response.success) {
                 this.processes = JSON.parse(response.output || '[]');
                 this.renderProcesses();
-                this.updateLogProcessSelect();
-                this.updateConnectionStatus('connected');
             } else {
                 throw new Error(response.error || 'Failed to fetch processes');
             }
         } catch (error) {
             console.error('Error loading processes:', error);
-            this.showError('Failed to load processes: ' + error.message);
-            this.updateConnectionStatus('error');
+            this.showError('failed to load processes: ' + error.message);
         }
     }
 
@@ -94,45 +125,45 @@ class PM2Dashboard {
         const grid = document.getElementById('processesGrid');
         
         if (this.processes.length === 0) {
-            grid.innerHTML = '<div class="loading">No PM2 processes found</div>';
+            grid.innerHTML = '<div class="loading">no processes found</div>';
             return;
         }
 
         grid.innerHTML = this.processes.map(proc => `
             <div class="process-card">
                 <div class="process-header">
-                    <div class="process-name">${proc.name || 'Unknown'}</div>
+                    <div class="process-name" onclick="dashboard.showLogs('${proc.name}')">${proc.name || 'unknown'}</div>
                     <div class="process-status ${this.getStatusClass(proc.pm2_env?.status)}">${proc.pm2_env?.status || 'unknown'}</div>
                 </div>
                 <div class="process-info">
                     <div class="info-item">
-                        <span class="info-label">PID:</span>
-                        <span class="info-value">${proc.pid || 'N/A'}</span>
+                        <span class="info-label">pid:</span>
+                        <span class="info-value">${proc.pid || 'n/a'}</span>
                     </div>
                     <div class="info-item">
-                        <span class="info-label">CPU:</span>
+                        <span class="info-label">cpu:</span>
                         <span class="info-value">${proc.monit?.cpu || 0}%</span>
                     </div>
                     <div class="info-item">
-                        <span class="info-label">Memory:</span>
+                        <span class="info-label">memory:</span>
                         <span class="info-value">${this.formatMemory(proc.monit?.memory)}</span>
                     </div>
                     <div class="info-item">
-                        <span class="info-label">Uptime:</span>
+                        <span class="info-label">uptime:</span>
                         <span class="info-value">${this.formatUptime(proc.pm2_env?.pm_uptime)}</span>
                     </div>
                     <div class="info-item">
-                        <span class="info-label">Restarts:</span>
+                        <span class="info-label">restarts:</span>
                         <span class="info-value">${proc.pm2_env?.restart_time || 0}</span>
                     </div>
                     <div class="info-item">
-                        <span class="info-label">Script:</span>
-                        <span class="info-value">${proc.pm2_env?.pm_exec_path?.split('/').pop() || 'N/A'}</span>
+                        <span class="info-label">script:</span>
+                        <span class="info-value">${proc.pm2_env?.pm_exec_path?.split('/').pop() || 'n/a'}</span>
                     </div>
                 </div>
                 <div class="process-actions">
-                    <button class="action-btn stop" onclick="dashboard.stopProcess('${proc.name}')">Stop</button>
-                    <button class="action-btn restart" onclick="dashboard.restartProcess('${proc.name}')">Restart</button>
+                    <button class="action-btn stop" onclick="dashboard.stopProcess('${proc.name}')">stop</button>
+                    <button class="action-btn restart" onclick="dashboard.restartProcess('${proc.name}')">restart</button>
                 </div>
             </div>
         `).join('');
@@ -142,23 +173,23 @@ class PM2Dashboard {
         const tableBody = document.getElementById('processTableBody');
         
         if (this.processes.length === 0) {
-            tableBody.innerHTML = '<tr><td colspan="8" class="loading">No PM2 processes found</td></tr>';
+            tableBody.innerHTML = '<tr><td colspan="8" class="loading">no processes found</td></tr>';
             return;
         }
 
         tableBody.innerHTML = this.processes.map(proc => `
             <tr>
-                <td class="table-process-name">${proc.name || 'Unknown'}</td>
+                <td class="table-process-name" onclick="dashboard.showLogs('${proc.name}')">${proc.name || 'unknown'}</td>
                 <td><span class="process-status ${this.getStatusClass(proc.pm2_env?.status)}">${proc.pm2_env?.status || 'unknown'}</span></td>
-                <td>${proc.pid || 'N/A'}</td>
+                <td>${proc.pid || 'n/a'}</td>
                 <td>${proc.monit?.cpu || 0}%</td>
                 <td>${this.formatMemory(proc.monit?.memory)}</td>
                 <td>${this.formatUptime(proc.pm2_env?.pm_uptime)}</td>
                 <td>${proc.pm2_env?.restart_time || 0}</td>
                 <td>
                     <div class="table-actions">
-                        <button class="table-action-btn stop" onclick="dashboard.stopProcess('${proc.name}')">Stop</button>
-                        <button class="table-action-btn restart" onclick="dashboard.restartProcess('${proc.name}')">Restart</button>
+                        <button class="table-action-btn stop" onclick="dashboard.stopProcess('${proc.name}')">stop</button>
+                        <button class="table-action-btn restart" onclick="dashboard.restartProcess('${proc.name}')">restart</button>
                     </div>
                 </td>
             </tr>
@@ -171,13 +202,13 @@ class PM2Dashboard {
     }
 
     formatMemory(bytes) {
-        if (!bytes) return '0 MB';
+        if (!bytes) return '0mb';
         const mb = bytes / (1024 * 1024);
-        return mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${mb.toFixed(1)} MB`;
+        return mb >= 1024 ? `${(mb / 1024).toFixed(1)}gb` : `${mb.toFixed(1)}mb`;
     }
 
     formatUptime(timestamp) {
-        if (!timestamp) return 'N/A';
+        if (!timestamp) return 'n/a';
         const uptime = Date.now() - timestamp;
         const seconds = Math.floor(uptime / 1000);
         const minutes = Math.floor(seconds / 60);
@@ -216,25 +247,6 @@ class PM2Dashboard {
         }
     }
 
-    updateLogProcessSelect() {
-        const select = document.getElementById('logProcessSelect');
-        select.innerHTML = '<option value="">Select a process</option>' + 
-            this.processes.map(proc => `<option value="${proc.name}">${proc.name}</option>`).join('');
-    }
-
-    async selectLogProcess(processName) {
-        this.currentLogProcess = processName;
-        if (this.logUpdateInterval) {
-            clearInterval(this.logUpdateInterval);
-        }
-
-        if (processName) {
-            await this.loadLogs();
-            this.logUpdateInterval = setInterval(() => this.loadLogs(), 2000);
-        } else {
-            document.getElementById('logsOutput').textContent = 'Select a process to view logs...';
-        }
-    }
 
     async loadLogs() {
         if (!this.currentLogProcess) return;
@@ -251,9 +263,6 @@ class PM2Dashboard {
         }
     }
 
-    clearLogs() {
-        document.getElementById('logsOutput').textContent = 'Select a process to view logs...';
-    }
 
     async executeCommand(command) {
         try {
@@ -366,25 +375,6 @@ class PM2Dashboard {
         };
     }
 
-    updateConnectionStatus(status) {
-        const statusDot = document.getElementById('connectionStatus');
-        const statusText = document.getElementById('connectionText');
-
-        statusDot.className = 'status-dot';
-        
-        switch (status) {
-            case 'connected':
-                statusDot.classList.add('connected');
-                statusText.textContent = 'Connected';
-                break;
-            case 'connecting':
-                statusText.textContent = 'Connecting...';
-                break;
-            case 'error':
-                statusText.textContent = 'Connection Error';
-                break;
-        }
-    }
 
     showError(message) {
         const grid = document.getElementById('processesGrid');

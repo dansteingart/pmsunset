@@ -39,5 +39,5 @@ app.get('/', (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`PM2 Sunset Dashboard running on http://localhost:${PORT}`);
+    console.log(`pmsunset running on http://localhost:${PORT}`);
 });
