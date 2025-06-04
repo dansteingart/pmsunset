@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PM2 Sunset Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>PM2 Sunset Dashboard</h1>
+            <div class="status-indicator">
+                <span class="status-dot" id="connectionStatus"></span>
+                <span id="connectionText">Connecting...</span>
+            </div>
+        </header>
+
+        <main class="main">
+            <div class="sidebar">
+                <nav class="nav">
+                    <button class="nav-btn active" data-tab="processes">Processes</button>
+                    <button class="nav-btn" data-tab="logs">Logs</button>
+                </nav>
+            </div>
+
+            <div class="content">
+                <div class="tab-content active" id="processes-tab">
+                    <div class="processes-header">
+                        <h2>Running Processes</h2>
+                        <div class="header-controls">
+                            <div class="view-toggle">
+                                <button class="view-btn active" data-view="cards" id="cardsViewBtn">Cards</button>
+                                <button class="view-btn" data-view="table" id="tableViewBtn">Table</button>
+                            </div>
+                            <button class="refresh-btn" id="refreshBtn">Refresh</button>
+                        </div>
+                    </div>
+                    <div class="processes-grid" id="processesGrid">
+                        <div class="loading">Loading processes...</div>
+                    </div>
+                    <div class="processes-table hidden" id="processesTable">
+                        <table class="process-table">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Status</th>
+                                    <th>PID</th>
+                                    <th>CPU</th>
+                                    <th>Memory</th>
+                                    <th>Uptime</th>
+                                    <th>Restarts</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="processTableBody">
+                                <tr>
+                                    <td colspan="8" class="loading">Loading processes...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="logs-tab">
+                    <div class="logs-header">
+                        <h2>Process Logs</h2>
+                        <select class="process-select" id="logProcessSelect">
+                            <option value="">Select a process</option>
+                        </select>
+                        <button class="clear-logs-btn" id="clearLogsBtn">Clear</button>
+                    </div>
+                    <div class="logs-container">
+                        <pre class="logs-output" id="logsOutput">Select a process to view logs...</pre>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
